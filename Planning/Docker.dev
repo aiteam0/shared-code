@@ -1,0 +1,255 @@
+# Neo4j 5.26.5-community를 베이스로 사용
+FROM neo4j:5.26.5-community
+
+# 사용자를 root로 변경 (패키지 설치를 위해)
+USER root
+
+# 시스템 패키지 업데이트 및 필요한 패키지 설치
+RUN apt-get update && \
+    apt-get install -y \
+        python3 \
+        python3-pip \
+        python3-venv \
+        procps \
+        curl \
+        wget \
+        vim \
+        nano \
+        tree \
+        htop \
+        git \
+        sudo && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Python 패키지 설치 (JupyterLab 확장 포함)
+RUN pip3 install --no-cache-dir \
+    jupyterlab \
+    jupyterlab-git \
+    jupyterlab-system-monitor \
+    neo4j \
+    pandas \
+    numpy \
+    matplotlib \
+    seaborn \
+    plotly \
+    networkx \
+    py2neo \
+    ipywidgets \
+    jupyterlab-widgets
+
+# JupyterLab 워크스페이스 디렉토리 생성 및 환경 설정
+RUN mkdir -p /var/lib/neo4j/notebooks && \
+    chown -R neo4j:neo4j /var/lib/neo4j/notebooks
+
+# neo4j 사용자 권한 확장 (필요한 디렉토리들에 대한 접근 권한)
+RUN usermod -a -G adm neo4j && \
+    echo "neo4j ALL=(ALL) NOPASSWD: /bin/ls, /bin/cat, /bin/grep, /usr/bin/tail, /usr/bin/head, /usr/bin/find" >> /etc/sudoers && \
+    # 주요 디렉토리들에 대한 읽기 권한 부여
+    chmod -R o+r /etc/neo4j/ || true && \
+    chmod -R o+r /logs/ || true && \
+    chmod -R o+r /var/lib/neo4j/ || true
+
+# neo4j 사용자를 위한 유용한 환경 설정
+RUN echo '# Neo4j + JupyterLab 환경 설정' >> /var/lib/neo4j/.bashrc && \
+    echo 'export PATH=$PATH:/var/lib/neo4j/bin' >> /var/lib/neo4j/.bashrc && \
+    echo 'export NEO4J_HOME=/var/lib/neo4j' >> /var/lib/neo4j/.bashrc && \
+    echo '' >> /var/lib/neo4j/.bashrc && \
+    echo '# 유용한 alias들' >> /var/lib/neo4j/.bashrc && \
+    echo 'alias ll="ls -la"' >> /var/lib/neo4j/.bashrc && \
+    echo 'alias la="ls -A"' >> /var/lib/neo4j/.bashrc && \
+    echo 'alias l="ls -CF"' >> /var/lib/neo4j/.bashrc && \
+    echo 'alias neo4j-status="neo4j status"' >> /var/lib/neo4j/.bashrc && \
+    echo 'alias neo4j-logs="tail -f /logs/neo4j.log"' >> /var/lib/neo4j/.bashrc && \
+    echo 'alias neo4j-debug="tail -f /logs/debug.log"' >> /var/lib/neo4j/.bashrc && \
+    echo 'alias neo4j-conf="cd /var/lib/neo4j/conf"' >> /var/lib/neo4j/.bashrc && \
+    echo 'alias neo4j-data="cd /data"' >> /var/lib/neo4j/.bashrc && \
+    echo 'alias neo4j-logs-dir="cd /logs"' >> /var/lib/neo4j/.bashrc && \
+    echo 'alias neo4j-plugins="cd /var/lib/neo4j/plugins"' >> /var/lib/neo4j/.bashrc && \
+    echo 'alias notebooks="cd /var/lib/neo4j/notebooks"' >> /var/lib/neo4j/.bashrc && \
+    echo 'alias root-dir="cd /"' >> /var/lib/neo4j/.bashrc && \
+    echo '' >> /var/lib/neo4j/.bashrc && \
+    echo '# 현재 위치 표시' >> /var/lib/neo4j/.bashrc && \
+    echo 'echo "===========================================" ' >> /var/lib/neo4j/.bashrc && \
+    echo 'echo "Neo4j + JupyterLab 환경에 오신 것을 환영합니다!" ' >> /var/lib/neo4j/.bashrc && \
+    echo 'echo "===========================================" ' >> /var/lib/neo4j/.bashrc && \
+    echo 'echo "Neo4j 홈: $NEO4J_HOME"' >> /var/lib/neo4j/.bashrc && \
+    echo 'echo "Neo4j Browser: http://localhost:7474"' >> /var/lib/neo4j/.bashrc && \
+    echo 'echo "JupyterLab: http://localhost:8888"' >> /var/lib/neo4j/.bashrc && \
+    echo 'echo "현재 위치: $(pwd)"' >> /var/lib/neo4j/.bashrc && \
+    echo 'echo "JupyterLab에서 전체 파일 시스템 접근 가능"' >> /var/lib/neo4j/.bashrc && \
+    echo 'echo "===========================================" ' >> /var/lib/neo4j/.bashrc && \
+    echo '' >> /var/lib/neo4j/.bashrc
+
+# neo4j 사용자가 시스템의 더 많은 부분에 접근할 수 있도록 권한 조정
+RUN chown neo4j:neo4j /var/lib/neo4j/.bashrc
+
+# 샘플 Jupyter 노트북 생성
+RUN echo '{' > /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo ' "cells": [' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '  {' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '   "cell_type": "markdown",' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '   "metadata": {},' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '   "source": [' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '    "# Neo4j와 JupyterLab 연동 예제\\n",' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '    "\\n",' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '    "이 노트북은 Neo4j 데이터베이스에 연결하고 기본적인 쿼리를 실행하는 방법을 보여줍니다.\\n",' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '    "\\n",' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '    "## 파일 시스템 탐색\\n",' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '    "\\n",' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '    "왼쪽 파일 브라우저에서 다음 디렉토리들을 탐색할 수 있습니다:\\n",' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '    "- `/data`: Neo4j 데이터 파일\\n",' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '    "- `/logs`: Neo4j 로그 파일\\n",' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '    "- `/var/lib/neo4j/conf`: Neo4j 설정 파일\\n",' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '    "- `/var/lib/neo4j/plugins`: Neo4j 플러그인\\n",' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '    "- `/var/lib/neo4j/notebooks`: Jupyter 노트북 파일들"' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '   ]' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '  },' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '  {' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '   "cell_type": "code",' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '   "execution_count": null,' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '   "metadata": {},' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '   "outputs": [],' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '   "source": [' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '    "from neo4j import GraphDatabase\\n",' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '    "import pandas as pd\\n",' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '    "import os\\n",' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '    "\\n",' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '    "# 현재 작업 디렉토리 확인\\n",' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '    "print(f\\"현재 작업 디렉토리: {os.getcwd()}\\")\\n",' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '    "\\n",' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '    "# Neo4j 관련 디렉토리 확인\\n",' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '    "neo4j_dirs = [\\"/data\\", \\"/logs\\", \\"/var/lib/neo4j/conf\\", \\"/var/lib/neo4j\\"]\\n",' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '    "for dir_path in neo4j_dirs:\\n",' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '    "    if os.path.exists(dir_path):\\n",' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '    "        print(f\\"{dir_path}: 존재함\\")\\n",' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '    "    else:\\n",' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '    "        print(f\\"{dir_path}: 존재하지 않음\\")"' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '   ]' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '  },' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '  {' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '   "cell_type": "code",' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '   "execution_count": null,' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '   "metadata": {},' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '   "outputs": [],' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '   "source": [' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '    "# Neo4j 연결 설정\\n",' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '    "uri = \\"bolt://localhost:7687\\"\\n",' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '    "driver = GraphDatabase.driver(uri, auth=(\\"neo4j\\", \\"password\\"))\\n",' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '    "\\n",' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '    "def run_query(query):\\n",' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '    "    with driver.session() as session:\\n",' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '    "        result = session.run(query)\\n",' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '    "        return [record.data() for record in result]\\n",' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '    "\\n",' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '    "# 간단한 테스트 쿼리\\n",' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '    "try:\\n",' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '    "    result = run_query(\\"RETURN '\''Hello Neo4j!'\'' as message\\")\\n",' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '    "    print(\\"Neo4j 연결 성공!\\")\\n",' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '    "    print(result)\\n",' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '    "except Exception as e:\\n",' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '    "    print(f\\"Neo4j 연결 실패: {e}\\")"' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '   ]' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '  }' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo ' ],' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo ' "metadata": {' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '  "kernelspec": {' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '   "display_name": "Python 3",' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '   "language": "python",' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '   "name": "python3"' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '  },' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '  "language_info": {' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '   "name": "python",' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '   "version": "3.8.0"' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '  }' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo ' },' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo ' "nbformat": 4,' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo ' "nbformat_minor": 4' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb && \
+    echo '}' >> /var/lib/neo4j/notebooks/neo4j_example.ipynb
+
+# 샘플 노트북 권한 설정
+RUN chown neo4j:neo4j /var/lib/neo4j/notebooks/neo4j_example.ipynb
+
+# 수정된 entrypoint 스크립트 생성
+RUN echo '#!/bin/bash' > /startup/neo4j-jupyter-entrypoint.sh && \
+    echo 'set -e' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo '' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo '# Neo4j가 완전히 시작될 때까지 대기하는 함수' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo 'wait_for_neo4j() {' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo '    echo "Neo4j가 시작될 때까지 대기 중..."' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo '    for i in {1..30}; do' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo '        if curl -s http://localhost:7474/ > /dev/null 2>&1; then' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo '            echo "Neo4j가 시작되었습니다!"' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo '            return 0' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo '        fi' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo '        echo "Neo4j 시작 대기 중... (${i}/30)"' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo '        sleep 2' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo '    done' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo '    echo "Neo4j 시작 시간 초과!"' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo '    return 1' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo '}' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo '' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo '# JupyterLab 시작 함수' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo 'start_jupyter() {' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo '    echo "JupyterLab 시작 중..."' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo '    cd /' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo '    su-exec neo4j:neo4j jupyter lab \' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo '        --ip=0.0.0.0 \' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo '        --port=8888 \' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo '        --no-browser \' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo '        --allow-root \' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo '        --NotebookApp.token="" \' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo '        --NotebookApp.password="" \' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo '        --notebook-dir=/ &' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo '    echo "JupyterLab이 백그라운드에서 시작되었습니다."' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo '}' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo '' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo '# 메인 실행 부분' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo 'if [ "$1" = "neo4j" ]; then' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo '    # Neo4j를 백그라운드에서 시작' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo '    echo "Neo4j 시작 중..."' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo '    /startup/docker-entrypoint.sh neo4j &' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo '    NEO4J_PID=$!' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo '    ' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo '    # Neo4j가 완전히 시작될 때까지 대기' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo '    wait_for_neo4j' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo '    ' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo '    # JupyterLab 시작' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo '    start_jupyter' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo '    ' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo '    # 두 프로세스가 실행 중인지 확인하는 무한 루프' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo '    echo "모든 서비스가 시작되었습니다!"' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo '    echo "Neo4j Browser: http://localhost:7474"' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo '    echo "JupyterLab: http://localhost:8888"' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo '    echo "JupyterLab에서 전체 파일 시스템에 접근할 수 있습니다."' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo '    ' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo '    # Neo4j 프로세스를 포어그라운드로 가져와서 컨테이너가 종료되지 않도록 함' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo '    wait $NEO4J_PID' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo 'else' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo '    # neo4j가 아닌 다른 명령어는 기존 entrypoint로 전달' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo '    exec /startup/docker-entrypoint.sh "$@"' >> /startup/neo4j-jupyter-entrypoint.sh && \
+    echo 'fi' >> /startup/neo4j-jupyter-entrypoint.sh
+
+# 스크립트에 실행 권한 부여
+RUN chmod +x /startup/neo4j-jupyter-entrypoint.sh
+
+# 포트 노출
+# 7474: Neo4j HTTP
+# 7687: Neo4j Bolt
+# 8888: JupyterLab
+EXPOSE 7474 7687 8888
+
+# 볼륨 설정
+VOLUME ["/data", "/logs", "/var/lib/neo4j/notebooks"]
+
+# 환경변수 설정
+ENV NEO4J_AUTH=neo4j/password
+ENV JUPYTER_ENABLE_LAB=yes
+
+# 헬스체크 추가
+HEALTHCHECK --interval=30s --timeout=3s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:7474/ && curl -f http://localhost:8888/ || exit 1
+
+# 새로운 entrypoint 사용
+ENTRYPOINT ["tini", "-g", "--", "/startup/neo4j-jupyter-entrypoint.sh"]
+CMD ["neo4j"]
