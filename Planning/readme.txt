@@ -1,169 +1,58 @@
-class GoogleCustomSearch(BaseTool):
-    """Google Custom Search API를 사용한 웹 검색 도구 (글로벌 최적화)"""
-    
-    # ... 기존 필드들 ...
-    
-    def _run(self, query: str, run_manager=None) -> str:
-        """검색 실행 메서드"""
+def Google_API(query, wanted_row):
+    """
+    input : 
+        query : str  검색하고 싶은 검색어 
+        wanted_row : str 검색 결과를 몇 행 저장할 것인지 
+    output : 
+        df_google : dataframe / column = title, link,description  
+        사용자로 부터 입력받은 쿼리문을 통해 나온 검색 결과를 wanted_row만큼 (100행을 입력받았으면) 100행이 저장된 데이터 프레임을 return합니다.
+    """
+
+    query= query.replace("|","OR") #쿼리에서 입력받은 | 기호를 OR 로 바꿉니다 
+    query += "-filetype:pdf" # 검색식을 사용하여 file type이 pdf가 아닌 것을 제외시켰습니다 
+    start_pages=[] # start_pages 라는 리스트를 생성합니다. 
+
+    df_google= pd.DataFrame(columns=['Title','Link','Description']) # df_Google이라는 데이터 프레임에 컬럼명은 Title, Link, Description으로 설정했습니다.
+
+    row_count =0 # dataframe에 정보가 입력되는 것을 카운트 하기 위해 만든 변수입니다. 
+
+
+    for i in range(1,wanted_row+1000,10):
+        start_pages.append(i) #구글 api는 1페이지당 10개의 결과물을 보여줘서 1,11,21순으로 로드한 페이지를 리스트에 담았습니다. 
+
+    for start_page in start_pages:
+      # 1페이지, 11페이지,21페이지 마다, 
+        url = f"https://www.googleapis.com/customsearch/v1?key={Google_API_KEY}&cx={Google_SEARCH_ENGINE_ID}&q={query}&start={start_page}"
+        # 요청할 URL에 사용자 정보인 API key, CSE ID를 저장합니다. 
+        data = requests.get(url).json()
+        # request를 requests 라이브러리를 통해서 요청하고, 결과를 json을 호출하여 데이터에 담습니다.
+        search_items = data.get("items")
+        # data의 하위에 items키로 저장돼있는 값을 불러옵니다. 
+        # search_items엔 검색결과 [1~ 10]개의 아이템들이 담겨있다.  start_page = 11 ~ [11~20] 
+        
         try:
-            # API 키 확인
-            if not self.api_key or not self.search_engine_id:
-                return json.dumps({
-                    "error": "Google API 키 또는 검색 엔진 ID가 설정되지 않았습니다.",
-                    "results": []
-                })
-            
-            # 검색 파라미터 구성
-            params = {
-                "key": self.api_key,
-                "cx": self.search_engine_id,
-                "q": query,
-                "num": min(self.max_results, 10),  # 최대 10개
-                "searchType": "image" if self.include_images else "web"
-            }
-            
-            # 글로벌 검색 최적화
-            params["gl"] = "us"  # 글로벌 결과
-            params["hl"] = "en"  # 영어 인터페이스
-            
-            # 날짜 제한 설정
-            if self.days and self.days > 0:
-                if self.days <= 7:
-                    params["dateRestrict"] = f"d{self.days}"
-                elif self.days <= 30:
-                    params["dateRestrict"] = f"w{self.days//7}"
-                else:
-                    params["dateRestrict"] = f"m{self.days//30}"
-            
-            # 도메인 필터링
-            if self.include_domains:
-                params["siteSearch"] = " OR ".join(self.include_domains)
-                params["siteSearchFilter"] = "i"
-            elif self.exclude_domains:
-                params["siteSearch"] = " OR ".join(self.exclude_domains)
-                params["siteSearchFilter"] = "e"
-            
-            # API 호출
-            url = "https://www.googleapis.com/customsearch/v1"
-            response = requests.get(url, params=params)
-            response.raise_for_status()
-            
-            data = response.json()
-            search_items = data.get("items", [])
-            
-            # 결과 포맷팅
-            results = []
-            for item in search_items:
-                result = {
-                    "title": item.get("title", ""),
-                    "link": item.get("link", ""),
-                    "snippet": item.get("snippet", ""),
-                    "displayLink": item.get("displayLink", "")
-                }
-                results.append(result)
-            
-            return json.dumps({
-                "query": query,
-                "results": results,
-                "total_results": len(results)
-            }, ensure_ascii=False, indent=2)
-            
-        except Exception as e:
-            logger.error(f"Google Custom Search 에러: {str(e)}")
-            return json.dumps({
-                "error": f"검색 중 오류가 발생했습니다: {str(e)}",
-                "results": []
-            })
+          #try 구문을 하는 이유: 검색 결과가 null인 경우 link를 가져올 수가 없어서 없으면 없는대로 예외처리
+            for i, search_item in enumerate(search_items, start=1):
+              # link 가져오기 
+                link = search_item.get("link")
+                if any(trash in link for trash in Trash_Link):
+                  # 링크에 dcinside, News 등을 포함하고 있으면 데이터를 데이터프레임에 담지 않고, 다음 검색결과로 
+                    pass
+                else: 
+                    # 제목저장
+                    title = search_item.get("title")
+                    # 설명 저장 
+                    descripiton = search_item.get("snippet")
+                    # df_google에 한줄한줄 append 
+                    df_google.loc[start_page + i] = [title,link,descripiton] 
+                    # 저장하면 행 갯수 카운트 
+                    row_count+=1
+                    if (row_count >= wanted_row) or (row_count == 300) :
+                      #원하는 갯수만큼 저장끝나면
+                        return df_google
+        except:
+          # 더 이상 검색결과가 없으면 df_google 리턴 후 종료 
+            return df_google
 
-
-class GoogleNewsSearch(BaseTool):
-    """Google Custom Search API를 사용한 뉴스 검색 도구 (글로벌 최적화)"""
     
-    # ... 기존 필드들 ...
-    
-    def _run(self, query: str, run_manager=None) -> str:
-        """뉴스 검색 실행 메서드"""
-        try:
-            # API 키 확인
-            if not self.api_key or not self.search_engine_id:
-                return json.dumps({
-                    "error": "Google API 키 또는 검색 엔진 ID가 설정되지 않았습니다.",
-                    "results": []
-                })
-            
-            # 뉴스 검색 파라미터 구성
-            params = {
-                "key": self.api_key,
-                "cx": self.search_engine_id,
-                "q": query,
-                "num": min(self.max_results, 10),
-                "searchType": "web"
-            }
-            
-            # 글로벌 뉴스 검색 최적화
-            params["gl"] = "us"  # 글로벌 결과
-            params["hl"] = "en"  # 영어 인터페이스
-            
-            # 뉴스 특화 설정
-            if self.days and self.days > 0:
-                if self.days <= 7:
-                    params["dateRestrict"] = f"d{self.days}"
-                elif self.days <= 30:
-                    params["dateRestrict"] = f"w{self.days//7}"
-                else:
-                    params["dateRestrict"] = f"m{self.days//30}"
-            
-            # 뉴스 사이트 우선 검색
-            news_sites = [
-                "cnn.com", "bbc.com", "reuters.com", "ap.org", 
-                "bloomberg.com", "wsj.com", "nytimes.com", "guardian.com"
-            ]
-            params["siteSearch"] = " OR ".join(news_sites)
-            params["siteSearchFilter"] = "i"
-            
-            # 날짜순 정렬 (가능한 경우)
-            params["sort"] = "date"
-            
-            # API 호출
-            url = "https://www.googleapis.com/customsearch/v1"
-            response = requests.get(url, params=params)
-            response.raise_for_status()
-            
-            data = response.json()
-            search_items = data.get("items", [])
-            
-            # 뉴스 결과 포맷팅
-            results = []
-            for item in search_items:
-                result = {
-                    "title": item.get("title", ""),
-                    "link": item.get("link", ""),
-                    "snippet": item.get("snippet", ""),
-                    "source": item.get("displayLink", ""),
-                    "published_date": item.get("pagemap", {}).get("metatags", [{}])[0].get("article:published_time", "")
-                }
-                results.append(result)
-            
-            return json.dumps({
-                "query": query,
-                "results": results,
-                "total_results": len(results),
-                "search_type": "news"
-            }, ensure_ascii=False, indent=2)
-            
-        except Exception as e:
-            logger.error(f"Google News Search 에러: {str(e)}")
-            return json.dumps({
-                "error": f"뉴스 검색 중 오류가 발생했습니다: {str(e)}",
-                "results": []
-            })
-
-import os
-import requests
-import json
-import logging
-from typing import List, Dict, Optional
-from langchain_core.tools import BaseTool
-from pydantic import BaseModel, Field
-
-logger = logging.getLogger(__name__)
+    return df_google
