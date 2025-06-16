@@ -5,7 +5,11 @@ class GoogleCustomSearch(BaseTool):
     description: str = Field(default="Google Custom Search API를 사용하여 글로벌 웹 검색을 수행합니다.")
     args_schema: type[BaseModel] = Field(default=GoogleSearchInput)
     
-    # 모든 파라미터를 Pydantic 필드로 명시적 정의
+    # API 관련 필드 추가
+    api_key: str = Field(default_factory=lambda: os.getenv("GOOGLE_API_KEY", ""))
+    search_engine_id: str = Field(default_factory=lambda: os.getenv("GOOGLE_SEARCH_ENGINE_ID", ""))
+    
+    # 기존 파라미터 필드들
     max_results: int = Field(default=3, description="검색 결과 개수 (1-10)")
     search_type: str = Field(default="web", description="검색 타입 (web/image)")
     topic: str = Field(default="general", description="검색 주제")
@@ -20,15 +24,20 @@ class GoogleCustomSearch(BaseTool):
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        # 환경변수 설정은 default_factory에서 처리되므로 제거
 
 class GoogleNewsSearch(BaseTool):
     """Google Custom Search API를 사용한 뉴스 검색 도구 (글로벌 최적화)"""
     
     name: str = Field(default="google_news_search")
     description: str = Field(default="Google Custom Search API를 사용하여 글로벌 뉴스를 검색합니다.")
-    args_schema: type[BaseModel] = Field(default=GoogleNewsInput)
+    args_schema: type[BaseModel] = Field(default=GoogleSearchInput)
     
-    # 모든 파라미터를 Pydantic 필드로 명시적 정의
+    # API 관련 필드 추가
+    api_key: str = Field(default_factory=lambda: os.getenv("GOOGLE_API_KEY", ""))
+    search_engine_id: str = Field(default_factory=lambda: os.getenv("GOOGLE_SEARCH_ENGINE_ID", ""))
+    
+    # 뉴스 검색 파라미터 필드들
     max_results: int = Field(default=3, description="검색 결과 개수 (1-10)")
     days: int = Field(default=7, description="날짜 제한 (일)")
     country: str = Field(default="", description="국가 코드")
@@ -38,3 +47,4 @@ class GoogleNewsSearch(BaseTool):
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        # 환경변수 설정은 default_factory에서 처리되므로 제거
