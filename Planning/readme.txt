@@ -13,50 +13,99 @@ class TavilySearchInput(BaseModel):
     """Input for the Tavily tool."""
     query: str = Field(description="검색 쿼리")
 
-class GoogleCustomSearch:
-    """Google Custom Search API 기본 클래스"""
+class TavilySearch(BaseTool):
+    """TavilySearch 완벽 호환 클래스 (Google Custom Search 기반)"""
     
-    def __init__(self):
-        self.api_key = os.getenv('GOOGLE_API_KEY')
-        self.search_engine_id = os.getenv('GOOGLE_SEARCH_ENGINE_ID')
-        self.base_url = "https://www.googleapis.com/customsearch/v1"
+    name: str = "tavily_web_search"
+    description: str = (
+        "A search engine optimized for comprehensive, accurate, and trusted results. "
+        "Useful for when you need to answer questions about current events. "
+        "Input should be a search query. [IMPORTANT] Input(query) should be over 5 characters."
+    )
+    args_schema: type[BaseModel] = TavilySearchInput
+    
+    # 원본 TavilySearch의 모든 필드들 + Google API용 필드들
+    client: Optional[object] = None  # 호환성 유지 (사용 안함)
+    include_domains: list = []
+    exclude_domains: list = []
+    max_results: int = 3
+    topic: Literal["general", "news"] = "general"
+    days: int = 3
+    search_depth: Literal["basic", "advanced"] = "basic"
+    include_answer: bool = False
+    include_raw_content: bool = True
+    include_images: bool = False
+    format_output: bool = False
+    
+    # Google API용 필드들 추가
+    google_api_key: Optional[str] = None
+    google_search_engine_id: Optional[str] = None
+    google_base_url: str = "https://www.googleapis.com/customsearch/v1"
+
+    def __init__(
+        self,
+        api_key: Optional[str] = None,  # Tavily API 키 (호환성용, 사용 안함)
+        include_domains: list = [],
+        exclude_domains: list = [],
+        max_results: int = 3,
+        topic: Literal["general", "news"] = "general",
+        days: int = 3,
+        search_depth: Literal["basic", "advanced"] = "basic",
+        include_answer: bool = False,
+        include_raw_content: bool = True,
+        include_images: bool = False,
+        format_output: bool = False,
+    ):
+        """TavilySearch와 동일한 초기화 파라미터"""
+        super().__init__()
         
-        if not self.api_key or not self.search_engine_id:
+        # 원본 TavilySearch 속성들
+        self.client = None  # 호환성 유지
+        self.include_domains = include_domains
+        self.exclude_domains = exclude_domains
+        self.max_results = max_results
+        self.topic = topic
+        self.days = days
+        self.search_depth = search_depth
+        self.include_answer = include_answer
+        self.include_raw_content = include_raw_content
+        self.include_images = include_images
+        self.format_output = format_output
+        
+        # Google API 초기화
+        self.google_api_key = os.getenv('GOOGLE_API_KEY')
+        self.google_search_engine_id = os.getenv('GOOGLE_SEARCH_ENGINE_ID')
+        self.google_base_url = "https://www.googleapis.com/customsearch/v1"
+        
+        if not self.google_api_key or not self.google_search_engine_id:
             raise ValueError("GOOGLE_API_KEY와 GOOGLE_SEARCH_ENGINE_ID 환경변수가 필요합니다.")
-    
+
     def google_search(self, query: str, wanted_row: int = 10, search_type: str = "web", 
                      date_restrict: Optional[str] = None, news_sites: bool = False) -> List[Dict[str, str]]:
-        """
-        사용자 제공 Google_API 함수 개선 버전
-        """
-        # 기본 쿼리 처리
+        """Google Custom Search API 호출"""
         query = query.replace("|", "OR")
         if search_type == "web":
             query += " -filetype:pdf"
         
-        # 뉴스 검색 최적화
         if search_type == "news":
             if not date_restrict:
                 date_restrict = "w1"
             if news_sites:
-                query += " (site:news.google.com OR site:news.naver.com OR site:news.daum.net OR site:bbc.com OR site:cnn.com)"
+                query += " (site:news.google.com OR site:news.naver.com OR site:news.daum.net)"
         
         start_pages = []
         df_google = pd.DataFrame(columns=['Title','Link','Description'])
         row_count = 0
 
-        # 페이지 계산
         for i in range(1, wanted_row + 1000, 10):
             start_pages.append(i)
 
         for start_page in start_pages:
-            url = f"{self.base_url}?key={self.api_key}&cx={self.search_engine_id}&q={quote(query)}&start={start_page}&num=10"
+            url = f"{self.google_base_url}?key={self.google_api_key}&cx={self.google_search_engine_id}&q={quote(query)}&start={start_page}&num=10"
             
-            # 날짜 제한 추가
             if date_restrict:
                 url += f"&dateRestrict={date_restrict}"
             
-            # 뉴스 검색시 날짜순 정렬
             if search_type == "news":
                 url += "&sort=date"
             
@@ -69,11 +118,6 @@ class GoogleCustomSearch:
                 
                 for i, search_item in enumerate(search_items, start=1):
                     link = search_item.get("link")
-                    
-                    # Trash_Link 필터링 (사용자 코드와 동일)
-                    # if any(trash in link for trash in Trash_Link):
-                    #     continue
-                    
                     title = search_item.get("title")
                     description = search_item.get("snippet")
                     
@@ -100,62 +144,10 @@ class GoogleCustomSearch:
             })
         return results
 
-class TavilySearch(BaseTool, GoogleCustomSearch):
-    """TavilySearch 완벽 호환 클래스"""
-    
-    name: str = "tavily_web_search"
-    description: str = (
-        "A search engine optimized for comprehensive, accurate, and trusted results. "
-        "Useful for when you need to answer questions about current events. "
-        "Input should be a search query. [IMPORTANT] Input(query) should be over 5 characters."
-    )
-    args_schema: type[BaseModel] = TavilySearchInput
-    
-    # TavilySearch와 동일한 속성들
-    include_domains: list = []
-    exclude_domains: list = []
-    max_results: int = 3
-    topic: Literal["general", "news"] = "general"
-    days: int = 3
-    search_depth: Literal["basic", "advanced"] = "basic"
-    include_answer: bool = False
-    include_raw_content: bool = True
-    include_images: bool = False
-    format_output: bool = False
-
-    def __init__(
-        self,
-        api_key: Optional[str] = None,  # 호환성 유지 (실제로는 사용 안함)
-        include_domains: list = [],
-        exclude_domains: list = [],
-        max_results: int = 3,
-        topic: Literal["general", "news"] = "general",
-        days: int = 3,
-        search_depth: Literal["basic", "advanced"] = "basic",
-        include_answer: bool = False,
-        include_raw_content: bool = True,
-        include_images: bool = False,
-        format_output: bool = False,
-    ):
-        """TavilySearch와 동일한 초기화 파라미터"""
-        BaseTool.__init__(self)
-        GoogleCustomSearch.__init__(self)
-        
-        self.include_domains = include_domains
-        self.exclude_domains = exclude_domains
-        self.max_results = max_results
-        self.topic = topic
-        self.days = days
-        self.search_depth = search_depth
-        self.include_answer = include_answer
-        self.include_raw_content = include_raw_content
-        self.include_images = include_images
-        self.format_output = format_output
-
     def _run(self, query: str) -> str:
-        """BaseTool의 _run 메서드 구현 (원본과 동일)"""
+        """BaseTool의 _run 메서드 구현"""
         results = self.search(query)
-        return results  # 원본은 JSON 문자열 반환 안함
+        return results
 
     def search(
         self,
@@ -174,7 +166,6 @@ class TavilySearch(BaseTool, GoogleCustomSearch):
     ) -> list:
         """TavilySearch.search()와 동일한 인터페이스"""
         
-        # 파라미터 설정
         topic = topic or self.topic
         max_results = max_results or self.max_results
         days = days or self.days
@@ -206,7 +197,7 @@ class TavilySearch(BaseTool, GoogleCustomSearch):
                 "title": result["title"],
                 "url": result["link"],
                 "content": result["description"],
-                "score": 0.8,  # 기본 점수
+                "score": 0.8,
                 "raw_content": result["description"] if include_raw_content else None
             }
             tavily_results.append(tavily_result)
@@ -218,120 +209,104 @@ class TavilySearch(BaseTool, GoogleCustomSearch):
         results = self.search(query, **kwargs)
         return json.dumps(results, ensure_ascii=False)
 
-class GoogleNews(GoogleCustomSearch):
-    """GoogleNews 완벽 호환 클래스"""
+# GoogleNews 클래스도 동일한 방식으로 수정
+class GoogleNews:
+    """GoogleNews 완벽 호환 클래스 (Google Custom Search 기반)"""
     
     def __init__(self, use_morphological_analysis: bool = True):
-        """GoogleNews와 동일한 초기화"""
-        super().__init__()
-        self.base_url = "https://news.google.com/rss"  # 호환성 유지
+        self.base_url = "https://news.google.com/rss"
         self.use_morphological_analysis = use_morphological_analysis
-        self.kiwi = None  # Kiwi 사용 안함을 명시
+        self.kiwi = None
+        
+        # Google API 초기화
+        self.google_api_key = os.getenv('GOOGLE_API_KEY')
+        self.google_search_engine_id = os.getenv('GOOGLE_SEARCH_ENGINE_ID')
+        self.google_base_url = "https://www.googleapis.com/customsearch/v1"
+        
+        if not self.google_api_key or not self.google_search_engine_id:
+            raise ValueError("GOOGLE_API_KEY와 GOOGLE_SEARCH_ENGINE_ID 환경변수가 필요합니다.")
 
-    def extract_keywords(self, text: str) -> List[str]:
-        """GoogleNews.extract_keywords() 호환"""
-        if not text:
-            return []
+    def google_search(self, query: str, wanted_row: int = 10) -> List[Dict[str, str]]:
+        """Google Custom Search for News"""
+        query = query.replace("|", "OR")
+        query += " (site:news.google.com OR site:news.naver.com OR site:news.daum.net)"
         
-        # 간단한 키워드 추출 (Kiwi 없이)
-        words = text.split()
-        keywords = []
-        
-        # 의미없는 단어 제거
-        stop_words = ['것', '수', '때', '등', '중', '후', '전', '간', '내', '외', '이', '그', '저', '의', '을', '를', '에', '와', '과']
-        
-        for word in words:
-            word = word.strip()
-            if len(word) > 1 and word not in stop_words:
-                keywords.append(word)
-        
-        return keywords[:10]  # 최대 10개
-
-    def create_optimized_query(self, text: str) -> str:
-        """GoogleNews.create_optimized_query() 호환"""
-        if not self.use_morphological_analysis:
-            return text
+        results = []
+        for start_page in range(1, min(wanted_row + 91, 100), 10):
+            url = f"{self.google_base_url}?key={self.google_api_key}&cx={self.google_search_engine_id}&q={quote(query)}&start={start_page}&num=10&dateRestrict=w1&sort=date"
             
-        keywords = self.extract_keywords(text)
-        if not keywords:
-            return text
-            
-        return ' '.join(keywords[:5])
+            try:
+                data = requests.get(url).json()
+                search_items = data.get("items", [])
+                
+                for search_item in search_items:
+                    if len(results) >= wanted_row:
+                        return results
+                        
+                    results.append({
+                        "title": search_item.get("title", ""),
+                        "link": search_item.get("link", ""),
+                        "description": search_item.get("snippet", "")
+                    })
+                    
+            except Exception as e:
+                logging.error(f"Google News Search API 오류: {e}")
+                break
+                
+        return results
 
-    def search_by_keyword(
-        self, 
-        keyword: Optional[str] = None, 
-        k: int = 3, 
-        optimize_query: bool = True
-    ) -> List[Dict[str, str]]:
+    def search_by_keyword(self, keyword: Optional[str] = None, k: int = 3, optimize_query: bool = True) -> List[Dict[str, str]]:
         """GoogleNews.search_by_keyword() 호환"""
-        
         if not keyword:
             return self.search_latest(k)
         
-        # 쿼리 최적화
-        if optimize_query and self.use_morphological_analysis:
-            search_keyword = self.create_optimized_query(keyword)
-        else:
-            search_keyword = keyword
+        search_keyword = self.create_optimized_query(keyword) if optimize_query else keyword
+        google_results = self.google_search(search_keyword, k)
         
-        # Google Custom Search로 뉴스 검색
-        google_results = self.google_search(
-            query=search_keyword,
-            wanted_row=k,
-            search_type="news",
-            date_restrict="w1",  # 1주일 이내
-            news_sites=True
-        )
-        
-        # GoogleNews 포맷으로 변환
-        news_results = []
-        for result in google_results:
-            news_results.append({
+        return [
+            {
                 "url": result["link"],
                 "content": result["title"],
-                "published": "Recent",  # 정확한 발행일은 Google Custom Search에서 제공 안함
+                "published": "Recent",
                 "summary": result["description"]
-            })
-        
-        return news_results
+            }
+            for result in google_results
+        ]
 
     def search_latest(self, k: int = 3) -> List[Dict[str, str]]:
         """GoogleNews.search_latest() 호환"""
+        google_results = self.google_search("latest news", k)
         
-        # 최신 뉴스 검색
-        google_results = self.google_search(
-            query="latest news",
-            wanted_row=k,
-            search_type="news",
-            date_restrict="d1",  # 하루 이내
-            news_sites=True
-        )
-        
-        # GoogleNews 포맷으로 변환
-        news_results = []
-        for result in google_results:
-            news_results.append({
+        return [
+            {
                 "url": result["link"],
                 "content": result["title"],
                 "published": "Latest",
                 "summary": result["description"]
-            })
+            }
+            for result in google_results
+        ]
+
+    def extract_keywords(self, text: str) -> List[str]:
+        """간단한 키워드 추출"""
+        if not text:
+            return []
         
-        return news_results
+        words = text.split()
+        stop_words = ['것', '수', '때', '등', '중', '후', '전', '간', '내', '외', '이', '그', '저', '의', '을', '를', '에', '와', '과']
+        return [word.strip() for word in words if len(word.strip()) > 1 and word not in stop_words][:10]
+
+    def create_optimized_query(self, text: str) -> str:
+        """쿼리 최적화"""
+        if not self.use_morphological_analysis:
+            return text
+        keywords = self.extract_keywords(text)
+        return ' '.join(keywords[:5]) if keywords else text
 
     def get_analysis_info(self) -> Dict[str, any]:
-        """GoogleNews.get_analysis_info() 호환"""
+        """분석기 정보"""
         return {
             "kiwi_available": False,
             "morphological_analysis_enabled": self.use_morphological_analysis,
             "kiwi_initialized": False
         }
-
-    def _fetch_news(self, url: str, k: int = 3) -> List[Dict[str, str]]:
-        """GoogleNews._fetch_news() 호환 (사용 안함)"""
-        return []
-
-    def _collect_news(self, news_list: List[Dict[str, str]]) -> List[Dict[str, str]]:
-        """GoogleNews._collect_news() 호환 (사용 안함)"""
-        return news_list
